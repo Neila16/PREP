@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PREP — Exam preparation</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><img class="brand-logo" src="assets/prep-logo.png" alt="PREP logo"><span class="brand-caption">YOUR EXAM COMPANION</span></div>
+  <nav class="nav">
+    <button class="active" data-view="dashboard">⌂ &nbsp; Dashboard</button>
+    <button data-view="diagnostic">◉ &nbsp; Diagnostic quiz</button>
+    <button data-view="topics">▤ &nbsp; Weak topics</button>
+    <button data-view="mock">◷ &nbsp; Mock exam</button>
+    <button data-view="setup">＋ &nbsp; Exam setup</button>
+  </nav>
+  <div class="side-note"><b>PREP YOUR WAY.</b><br>PREP helps you find what to review next. Results are practice estimates, not predictions of your real exam grade.</div>
+</aside>
+<main>
+<header class="top"><div><div class="eyebrow">PREP / YOUR STUDY SPACE</div><h1 id="pageTitle">Your exam overview</h1><div class="muted" id="welcomeText">Less stress. More progress. One step at a time.</div></div><button class="secondary" onclick="showView('setup')">＋ Add exam</button></header>
+
+<section class="view active" id="dashboard">
+  <div class="grid">
+    <div class="card span-8 featured-card">
+      <div class="row" style="justify-content:space-between"><div><h2 id="examName">Introduction to Cybersecurity</h2><div class="muted small" id="examDateText">Example exam · 7 days left</div></div><span class="pill">Study plan</span></div>
+      <div class="stats"><div class="stat"><span class="muted small">Topics reviewed</span><strong id="reviewedStat">2/5</strong></div><div class="stat"><span class="muted small">Quiz accuracy</span><strong id="accuracyStat">60%</strong></div><div class="stat"><span class="muted small">Next session</span><strong style="font-size:19px">15 min</strong></div></div>
+      <h3>Recommended next step</h3>
+      <div class="task"><div class="task-icon">🎯</div><div style="flex:1"><b id="nextTaskTitle">Review Network Security</b><p class="muted small" id="nextTaskDesc">This topic currently has the lowest practice score.</p></div><button onclick="showView('topics')">Start</button></div>
+      <div class="task"><div class="task-icon">🧠</div><div style="flex:1"><b>Check what you remember</b><p class="muted small">Take a short diagnostic quiz and update your weak topics.</p></div><button class="secondary" onclick="showView('diagnostic')">Quiz</button></div>
+    </div>
+    <div class="card span-4 confidence-card"><h2>Topic confidence</h2><div id="dashboardTopics"></div><div class="source">Demo data is included so you can try the prototype immediately. Use the quiz to change these results.</div></div>
+    <div class="card span-6"><h2>Your study path</h2><div class="task"><div class="task-icon">1</div><div><b>Diagnose</b><p class="muted small">Find the topics that need attention.</p></div></div><div class="task"><div class="task-icon">2</div><div><b>Review</b><p class="muted small">Study the highest-priority topic first.</p></div></div><div class="task"><div class="task-icon">3</div><div><b>Practice</b><p class="muted small">Try a timed mock exam and review mistakes.</p></div></div></div>
+    <div class="card span-6"><h2>Quick actions</h2><p class="muted">Choose one task to keep moving.</p><div class="row"><button onclick="showView('diagnostic')">Start diagnostic</button><button class="secondary" onclick="showView('mock')">Try mock exam</button></div><p class="small muted" style="margin-top:16px">Tip: short practice sessions can help you notice gaps before exam day.</p></div>
+  </div>
+</section>
+
+<section class="view" id="setup"><div class="card" style="max-width:700px"><h2>Set up your exam</h2><p class="muted">Add an exam to personalize the example study space. This prototype stores the exam in your current browser session.</p>
+<form id="examForm"><div class="field"><label for="subject">Course / exam name</label><input id="subject" required placeholder="e.g. Computer Networks Security"></div><div class="row"><div class="field"><label for="examDate">Exam date</label><input type="date" id="examDate" required></div><div class="field"><label for="hours">Available study time per day</label><select id="hours"><option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div></div>
+<div class="field"><label for="syllabusFile">Upload syllabus (PDF)</label><input type="file" id="syllabusFile" accept=".pdf,application/pdf" aria-describedby="uploadHelp"><div class="muted small" id="uploadHelp">Select a text-based PDF syllabus (up to 10 MB). Processing happens in your browser.</div></div>
+<div id="syllabusStatus" class="upload-status" role="status" aria-live="polite"></div>
+<div id="syllabusPreview" class="syllabus-preview" hidden><h3>Topics found in your syllabus</h3><p class="muted small">Review these suggestions before creating your study space. You can edit the list below.</p><div id="syllabusTopics"></div><details><summary>View extracted text preview</summary><pre id="syllabusTextPreview"></pre></details></div>
+<div class="field"><label for="materials">Topics / material outline</label><input id="materials" placeholder="e.g. TCP/IP, TLS, firewalls, access control"></div><div class="source">Upload a text-based PDF to suggest topics, or enter them manually separated by commas. This version does not use AI; quiz questions remain cybersecurity demo questions, not questions generated from your syllabus.</div><p><button type="submit">Create study space</button></p></form></div></section>
+
+<section class="view" id="diagnostic"><div class="card"><div class="row"><div><h2>Diagnostic quiz</h2><p class="muted">Answer these sample questions to check your current understanding.</p></div><span class="pill">5 questions</span></div><div id="quizArea"></div><div class="row" style="margin-top:18px"><button id="submitQuiz" onclick="submitQuiz()">Check answers</button><button class="ghost" onclick="resetQuiz()">Reset</button></div><div id="quizResult"></div><div class="source">Prototype content: sample cybersecurity questions with manually written explanations. Questions are not generated from uploaded course files.</div></div></section>
+
+<section class="view" id="topics"><div class="card"><h2>Weak topics</h2><p class="muted">Your scores help prioritize the next study task. A low score means “review this topic,” not a prediction of your exam grade.</p><div id="topicList"></div><div class="row" style="margin-top:18px"><button onclick="showView('diagnostic')">Retake diagnostic</button><button class="secondary" onclick="showView('mock')">Practice mock exam</button></div></div></section>
+
+<section class="view" id="mock"><div class="card"><div class="row"><div style="flex:2"><h2>Timed mock exam</h2><p class="muted">Try a short practice set under time pressure.</p></div><div class="timer" id="timer">05:00</div></div><div id="mockArea"></div><div class="row" style="margin-top:18px"><button id="startMock" onclick="startMock()">Start 5-minute exam</button><button id="submitMock" class="secondary" onclick="finishMock(false)" disabled>Submit answers</button></div><div id="mockResult"></div><div class="source">This is a short demonstration, not a full exam simulator. Your answers are evaluated locally in this browser.</div></div></section>
+<div class="footer">PREP MVP prototype · Demo content · No real grade or pass probability is calculated.</div>
+</main></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="js/app.js"></script>
+</body></html>
