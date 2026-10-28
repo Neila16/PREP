@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g
 const uid=()=>crypto.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2);
 const state={courses:[],materials:[],attempts:[],completed:[],questions:[],activeQuestions:[],mockQuestions:[],timer:null,remaining:600};
 let db;
+let currentPlanMode = "today";
 function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 async function initDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('prep-mvp-v2',2);r.onupgradeneeded=()=>{for(const n of ['courses','materials','attempts','completed','questions'])if(!r.result.objectStoreNames.contains(n))r.result.createObjectStore(n,{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function put(store,obj){await request(db.transaction(store,'readwrite').objectStore(store).put(obj))}
@@ -17,7 +18,7 @@ function materialsFor(id){return state.materials.filter(m=>m.courseId===id)}
 function scoreData(id,topic){let a=state.attempts.filter(a=>a.courseId===id&&a.topic===topic);if(!a.length)return null;return Math.round(a.reduce((n,x)=>n+Number(x.correct||0),0)/a.length*100)}
 function readiness(c){const scores=c.topics.map(t=>scoreData(c.id,t)).filter(s=>s!==null);const tested=scores.length;const accuracy=tested?scores.reduce((a,b)=>a+b,0)/tested:0;const coverage=c.topics.length?tested/c.topics.length*100:0;const completed=state.completed.filter(x=>x.courseId===c.id).length;const progress=Math.min(100,completed*15);const value=Math.round(.6*accuracy+.25*coverage+.15*progress);return {value,accuracy:Math.round(accuracy),coverage:Math.round(coverage),tested,available:state.attempts.some(a=>a.courseId===c.id)} }
 function days(date){return Math.ceil((new Date(date+'T00:00:00')-new Date(new Date().toDateString()))/86400000)}
-function refresh(){['materialCourse','notesCourse','quizCourse','topicsCourse','mockCourse','manageTopicsCourse','manualCourse'].forEach(id=>options(id));renderCourses();renderMaterials();renderTopicSelect('notes');renderTopicSelect('quiz');renderTopicSelect('manual');renderManageTopics();renderTopics();renderDashboard();renderPlan(false);renderManualList();bindTopicActions($('dashboardContent'))}
+function refresh(){['materialCourse','notesCourse','quizCourse','topicsCourse','mockCourse','manageTopicsCourse','manualCourse'].forEach(id=>options(id));renderCourses();renderMaterials();renderTopicSelect('notes');renderTopicSelect('quiz');renderTopicSelect('manual');renderManageTopics();renderTopics();renderDashboard();renderPlan(currentPlanMode === "lastMinute");renderManualList();bindTopicActions($('dashboardContent'))}
 // Open a topic-specific review flow without changing stored course data.
 function openTopicStudy(courseId,topic,section='notes'){
   if(!course(courseId))return notice('Course not found.',true);
@@ -27,7 +28,7 @@ function openTopicStudy(courseId,topic,section='notes'){
   renderTopicSelect(section);
   $(section+'Topic').value=topic;
   if(section==='notes')buildNotes();
-  else {state.activeQuestions=[];$('quizArea').innerHTML='';$('submitQuiz').disabled=true;}
+  else {state.activeQuestions=[];$('quizArea').innerHTML='';$('submitQuiz').disabled=true; $('generateQuiz').click();}
 }
 function topicStudyActions(courseId,topic){
   return `<div class="row topic-actions"><button type="button" class="btn outline" data-study="notes" data-course="${esc(courseId)}" data-topic="${esc(topic)}">Read topic notes</button><button type="button" class="btn" data-study="quiz" data-course="${esc(courseId)}" data-topic="${esc(topic)}">${scoreData(courseId,topic)===null?'Take topic quiz':'Retake topic quiz'}</button></div>`;
@@ -100,7 +101,37 @@ $('generateQuiz').onclick=()=>{let id=$('quizCourse').value;state.activeQuestion
 $('submitQuiz').onclick=async()=>{let q=state.activeQuestions;if(!q.length)return;let id=$('quizCourse').value,{correct,open}=await gradeQuestions(q,'quiz',id,'diagnostic');await load();$('submitQuiz').disabled=true;let el=$('quizArea');el.insertAdjacentHTML('beforeend',`<div class="notice">Multiple-choice correct: ${correct}/${q.length-open}. ${open?'Evaluate your '+open+' open answer(s) below.':'Results saved.'}</div>${open?'<button class="btn" id="quiz-self-save">Save open-answer assessments</button>':''}`);if(open)$('quiz-self-save').onclick=()=>saveSelf('quiz',q,id,'diagnostic');refresh()};
 function renderTopics(){let c=course($('topicsCourse').value);$('topicResults').innerHTML=c?.topics.length?c.topics.map(t=>{let s=scoreData(c.id,t),n=state.attempts.filter(a=>a.courseId===c.id&&a.topic===t).length;return `<div class="item"><div class="item-head"><b>${esc(t)}</b><span class="pill ${s===null?'warn':s>=75?'good':s<50?'warn':''}">${s===null?'Not assessed':s+'%'}</span></div><p class="small">${n} answered question(s)${s===null?' · Review this topic and take a quiz.':s<60?' · High review priority.':' · Keep practicing.'}</p><div class="bar"><i style="width:${s??0}%"></i></div>${topicStudyActions(c.id,t)}</div>`}).join(''):'<p>Add course topics first.</p>';bindTopicActions($('topicResults'))}
 function planItems(lastMinute){let all=[];for(let c of state.courses){let d=days(c.date);if(lastMinute&&(d<0||d>3))continue;for(let t of (c.topics.length?c.topics:materialsFor(c.id).map(m=>m.name.replace(/\.[^.]+$/,'')).slice(0,12))){let s=scoreData(c.id,t);let urgency=d<=1?40:d<=3?30:d<=7?20:d<=14?10:0;let priority=(s===null?35:100-s)+urgency;let id=c.id+'-'+t+'-'+new Date().toISOString().slice(0,10);if(state.completed.some(x=>x.id===id))continue;all.push({id,courseId:c.id,course:c.name,topic:t,priority,minutes:Math.min(45,Math.max(15,Math.floor(c.minutes/Math.min(3,c.topics.length||1)))),action:s===null?'Review source notes, then take a diagnostic quiz':s<60?'Review weak material and retest':'Practice with a timed mock exam'})}}return all.sort((a,b)=>b.priority-a.priority)}
-function renderPlan(lastMinute){let items=planItems(lastMinute),budget=state.courses.reduce((a,c)=>a+c.minutes,0);let selected=[],used=0;for(let item of items){if(used+item.minutes>Math.max(60,budget))continue;selected.push(item);used+=item.minutes;if(selected.length>=7)break}$('planResult').innerHTML=selected.length?`<h3>${lastMinute?'Last-minute plan':'Today’s study plan'} · ${used} min</h3>`+selected.map(x=>`<div class="item"><div class="item-head"><b>${esc(x.course)} · ${esc(x.topic)}</b><span class="pill">${x.minutes} min</span></div><p>${esc(x.action)}</p>${topicStudyActions(x.courseId,x.topic)}<button class="btn outline" onclick="completeTask('${esc(x.id)}','${esc(x.courseId)}')">Mark complete</button></div>`).join(''):'<p>No pending tasks. Add courses/topics or finish a diagnostic quiz.</p>'}
+function renderPlan(lastMinute){
+ currentPlanMode=lastMinute?'lastMinute':'today';
+ const items=planItems(lastMinute), budget=state.courses.reduce((a,c)=>a+c.minutes,0);
+ const limit=lastMinute?Math.max(30,Math.min(90,budget)):Math.max(60,budget);
+ const maxTasks=lastMinute?4:7;
+ let selected=[],used=0;
+ for(const item of items){
+  const time=lastMinute?Math.min(20,item.minutes):item.minutes;
+  if(used+time>limit)continue;
+  selected.push({...item,minutes:time});used+=time;
+  if(selected.length>=maxTasks)break;
+ }
+ const root=$('planResult');
+ $('refreshPlan').classList.toggle('plan-selected',!lastMinute);
+ $('lastMinute').classList.toggle('plan-selected',lastMinute);
+ $('refreshPlan').setAttribute('aria-pressed',String(!lastMinute));
+ $('lastMinute').setAttribute('aria-pressed',String(lastMinute));
+ const deadlineCount=state.courses.filter(c=>days(c.date)>=0&&days(c.date)<=3).length;
+ const intro=lastMinute
+  ?`<div class="plan-overview urgent"><span class="plan-mode-tag">⚡ EXAM CRUNCH MODE</span><h3>Focus on what matters most</h3><p>Only exams in the next 1–3 days. Short 20-minute sessions, weak topics first, followed by a quick retest.</p><div class="plan-stats"><span><b>${deadlineCount}</b> upcoming exam(s)</span><span><b>${selected.length}</b> priority topics</span><span><b>${used}</b> planned minutes</span></div></div>`
+  :`<div class="plan-overview"><span class="plan-mode-tag">✦ DAILY STUDY ROUTINE</span><h3>Build understanding, then practice</h3><p>Balanced study across your courses: revisit notes, check comprehension, and track progress as you complete each topic.</p><div class="plan-stats"><span><b>${state.courses.length}</b> courses</span><span><b>${selected.length}</b> study sessions</span><span><b>${used}</b> planned minutes</span></div></div>`;
+ let body=selected.length?`<div class="plan-task-heading"><h3>${lastMinute?'Your priority sprint':'Today’s study plan'} · ${used} min</h3><span>${selected.length} tasks</span></div>`+selected.map((x,i)=>{
+  const score=scoreData(x.courseId,x.topic);
+  const focus=score===null?'Not tested yet':score<60?'Needs extra practice':score<80?'Keep improving':'Good progress';
+  const advice=lastMinute?(score===null?'Quickly scan notes, then test yourself.':'Prioritize mistakes and retest immediately.'):(score===null?'Read source notes before your first diagnostic test.':x.action);
+  return `<article class="plan-task"><div class="plan-task-top"><span class="plan-step">${String(i+1).padStart(2,'0')}</span><div class="plan-task-text"><p class="plan-course">${esc(x.course)}</p><h4>${esc(x.topic)}</h4></div><span class="pill">${x.minutes} min</span></div><div class="plan-task-info"><span class="plan-focus">${esc(focus)}${score!==null?' · '+score+'%':''}</span><p>${esc(advice)}</p></div><div class="plan-task-buttons">${topicStudyActions(x.courseId,x.topic)}<button type="button" class="btn outline plan-done" data-complete-id="${esc(x.id)}" data-complete-course="${esc(x.courseId)}">✓ Mark complete</button></div></article>`;
+ }).join('') : `<div class="plan-empty"><h3>${lastMinute?'No exams within 1–3 days':'No pending sessions'}</h3><p>${lastMinute?'This mode only includes courses with exam dates within the next three days. Switch to the daily plan to work on other courses.':'Add courses and topics, or complete more practice to generate your next recommendations.'}</p></div>`;
+ root.innerHTML=intro+body;
+ bindTopicActions(root);
+ root.querySelectorAll('[data-complete-id]').forEach(btn=>btn.addEventListener('click',()=>completeTask(btn.dataset.completeId,btn.dataset.completeCourse)));
+}
 async function completeTask(id,courseId){await put('completed',{id,courseId,date:Date.now()});await load();refresh();notice('Study task marked complete.')}
 $('refreshPlan').onclick=()=>renderPlan(false);$('lastMinute').onclick=()=>renderPlan(true);
 function updateTimer(){$('timer').textContent=String(Math.floor(state.remaining/60)).padStart(2,'0')+':'+String(state.remaining%60).padStart(2,'0')}
